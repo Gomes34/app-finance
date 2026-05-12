@@ -1,7 +1,5 @@
 """
-ui/widgets.py  –  Todos os widgets customizados
-Correções: sem QPainter aninhado, sem QGraphicsEffect durante paintEvent,
-           FadeStack usa QStackedWidget real.
+ui/widgets.py  —  Todos os widgets customizados
 """
 
 from PySide6.QtWidgets import (
@@ -10,7 +8,6 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import (
     Qt, QPropertyAnimation, QEasingCurve, QTimer, QRectF,
-    QSequentialAnimationGroup, QParallelAnimationGroup,
 )
 from PySide6.QtGui import (
     QColor, QPainter, QPainterPath, QFont, QPen,
@@ -22,7 +19,6 @@ from PySide6.QtGui import (
 # ══════════════════════════════════════════════════════════════════════════════
 
 def clear_layout(layout):
-    """Remove e deleta todos os itens de um layout."""
     while layout.count():
         item = layout.takeAt(0)
         w = item.widget()
@@ -33,64 +29,63 @@ def clear_layout(layout):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  Card  (sem animação própria — evita conflito de painter)
+#  Card
 # ══════════════════════════════════════════════════════════════════════════════
 
 class Card(QFrame):
-    """Card branco com borda arredondada. Sem efeito gráfico próprio."""
-
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setProperty("card", "true")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  KPI Card
+#  KPI Card  —  badge de texto curto (ex: "SAL", "REC") em vez de emoji
 # ══════════════════════════════════════════════════════════════════════════════
 
 class KPICard(Card):
     def __init__(self, title: str, value: str, subtitle: str = "",
-                 icon: str = "💰", color: str = "#5B8DEF", parent=None):
+                 badge: str = "?", color: str = "#5B8DEF", parent=None):
         super().__init__(parent)
-        self.setFixedHeight(118)
+        self.setFixedHeight(110)
         self.setMinimumWidth(160)
 
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(16, 12, 16, 12)
-        lay.setSpacing(2)
+        lay.setContentsMargins(18, 14, 18, 14)
+        lay.setSpacing(3)
 
+        # topo: badge colorido
         top = QHBoxLayout()
-        icon_lbl = QLabel(icon)
-        icon_lbl.setFont(QFont("Segoe UI Emoji", 20))
-        dot = QLabel("●")
-        dot.setStyleSheet(f"color:{color}; font-size:8px;")
-        top.addWidget(icon_lbl)
+        bdg = QLabel(badge[:3].upper())
+        bdg.setFixedSize(38, 28)
+        bdg.setAlignment(Qt.AlignCenter)
+        bdg.setStyleSheet(
+            f"background:{color}1A; color:{color};"
+            "border-radius:7px; font-size:10px; font-weight:800;"
+            "letter-spacing:0.5px;")
+        top.addWidget(bdg)
         top.addStretch()
-        top.addWidget(dot)
         lay.addLayout(top)
 
         self._val = QLabel(value)
         self._val.setStyleSheet(
-            f"color:{color}; font-size:19px; font-weight:700;")
+            f"color:{color}; font-size:20px; font-weight:800;")
         lay.addWidget(self._val)
 
         lbl = QLabel(title)
         lbl.setStyleSheet(
-            "color:#7A849E; font-size:11px; font-weight:600;")
+            "color:#64748B; font-size:11px; font-weight:600;")
         lay.addWidget(lbl)
 
         if subtitle:
             sub = QLabel(subtitle)
-            sub.setStyleSheet("color:#A0AABF; font-size:10px;")
+            sub.setStyleSheet("color:#94A3B8; font-size:10px;")
             lay.addWidget(sub)
-
-        lay.addStretch()
 
     def set_value(self, value: str, color: str = None):
         self._val.setText(value)
         if color:
             self._val.setStyleSheet(
-                f"color:{color}; font-size:19px; font-weight:700;")
+                f"color:{color}; font-size:20px; font-weight:800;")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -98,9 +93,9 @@ class KPICard(Card):
 # ══════════════════════════════════════════════════════════════════════════════
 
 class NavButton(QPushButton):
-    def __init__(self, icon: str, text: str, parent=None):
-        super().__init__(f"  {icon}   {text}", parent)
-        self.setMinimumHeight(44)
+    def __init__(self, text: str, parent=None):
+        super().__init__(f"   {text}", parent)
+        self.setMinimumHeight(42)
         self.setCursor(Qt.PointingHandCursor)
 
     def set_active(self, active: bool):
@@ -110,13 +105,10 @@ class NavButton(QPushButton):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  FadeStack  — usa QStackedWidget + fade via QGraphicsOpacityEffect
-#  A troca de página acontece FORA do paintEvent → sem conflito
+#  FadeStack
 # ══════════════════════════════════════════════════════════════════════════════
 
 class FadeStack(QStackedWidget):
-    """QStackedWidget com transição fade entre páginas."""
-
     def __init__(self, parent=None):
         super().__init__(parent)
         self._animating = False
@@ -131,23 +123,18 @@ class FadeStack(QStackedWidget):
             self._animating = False
             return
 
-        # Prepara o novo widget com opacidade 0
         fx_new = QGraphicsOpacityEffect(new_widget)
         fx_new.setOpacity(0.0)
         new_widget.setGraphicsEffect(fx_new)
-
-        # Mostra o novo widget (empilhado abaixo visualmente)
         self.setCurrentIndex(index)
 
-        # Anima entrada (fade in)
         anim_in = QPropertyAnimation(fx_new, b"opacity", self)
-        anim_in.setDuration(300)
+        anim_in.setDuration(250)
         anim_in.setStartValue(0.0)
         anim_in.setEndValue(1.0)
         anim_in.setEasingCurve(QEasingCurve.OutCubic)
 
         def _done():
-            # Remove o efeito após animação para não interferir no painter
             new_widget.setGraphicsEffect(None)
             self._animating = False
 
@@ -156,17 +143,15 @@ class FadeStack(QStackedWidget):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  Donut Chart  — paintEvent único e seguro
+#  Donut Chart
 # ══════════════════════════════════════════════════════════════════════════════
 
 class DonutChart(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._data: list[tuple] = []   # (label, value, color_hex)
+        self._data: list[tuple] = []
         self.setMinimumSize(160, 160)
-        # Desativa background automático do Qt para evitar double-paint
         self.setAttribute(Qt.WA_OpaquePaintEvent, False)
-        self.setAttribute(Qt.WA_NoSystemBackground, False)
 
     def set_data(self, data: list):
         self._data = [d for d in data if d[1] > 0]
@@ -181,16 +166,16 @@ class DonutChart(QWidget):
 
             total = sum(v for _, v, _ in self._data)
             if not self._data or total == 0:
-                p.setPen(QColor("#A0AABF"))
+                p.setPen(QColor("#94A3B8"))
                 p.setFont(QFont("Segoe UI", 10))
                 p.drawText(self.rect(), Qt.AlignCenter, "Sem dados")
                 return
 
-            W, H   = float(self.width()), float(self.height())
-            size   = min(W, H) - 12.0
-            x      = (W - size) / 2.0
-            y      = (H - size) / 2.0
-            outer  = QRectF(x, y, size, size)
+            W, H  = float(self.width()), float(self.height())
+            size  = min(W, H) - 12.0
+            x     = (W - size) / 2.0
+            y     = (H - size) / 2.0
+            outer = QRectF(x, y, size, size)
 
             angle = 90 * 16
             for _, value, color in self._data:
@@ -200,10 +185,9 @@ class DonutChart(QWidget):
                 p.drawPie(outer, angle, -span)
                 angle -= span
 
-            # buraco central
-            hole  = size * 0.52
-            hx    = (W - hole) / 2.0
-            hy    = (H - hole) / 2.0
+            hole = size * 0.52
+            hx   = (W - hole) / 2.0
+            hy   = (H - hole) / 2.0
             p.setBrush(QColor("#FFFFFF"))
             p.setPen(Qt.NoPen)
             p.drawEllipse(QRectF(hx, hy, hole, hole))
@@ -212,7 +196,7 @@ class DonutChart(QWidget):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  SmoothBar  — barra de progresso animada, paintEvent único
+#  SmoothBar
 # ══════════════════════════════════════════════════════════════════════════════
 
 class SmoothBar(QWidget):
@@ -223,7 +207,7 @@ class SmoothBar(QWidget):
         self._target = min(float(value), float(max_val))
         self._max    = float(max_val) if max_val > 0 else 1.0
         self._color  = color
-        self.setFixedHeight(8)
+        self.setFixedHeight(7)
         self.setAttribute(Qt.WA_OpaquePaintEvent, False)
 
         self._timer = QTimer(self)
@@ -256,16 +240,14 @@ class SmoothBar(QWidget):
             H = float(self.height())
             r = H / 2.0
 
-            # fundo
             p.setBrush(QColor("#E8EDF7"))
             p.setPen(Qt.NoPen)
             bg = QPainterPath()
             bg.addRoundedRect(QRectF(0, 0, W, H), r, r)
             p.drawPath(bg)
 
-            # preenchimento
-            ratio    = max(0.0, min(self._value / self._max, 1.0))
-            fill_w   = ratio * W
+            ratio  = max(0.0, min(self._value / self._max, 1.0))
+            fill_w = ratio * W
             if fill_w > 0.5:
                 p.setBrush(QColor(self._color))
                 fg = QPainterPath()
@@ -276,73 +258,92 @@ class SmoothBar(QWidget):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  TickerBar  — cotações em scroll, paintEvent único
+#  QuoteBar  — barra fixa de cotações (USD, EUR, BTC), sem emojis
 # ══════════════════════════════════════════════════════════════════════════════
 
-class TickerBar(QWidget):
+class _QuoteChip(QFrame):
+    _COLORS = {"USD": "#16A34A", "EUR": "#3D74E8", "BTC": "#F59E0B"}
+
+    def __init__(self, code: str, parent=None):
+        super().__init__(parent)
+        self.setObjectName("quoteChip")
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(12, 0, 12, 0)
+        lay.setSpacing(7)
+
+        color = self._COLORS.get(code, "#64748B")
+
+        badge = QLabel(code)
+        badge.setFixedSize(34, 20)
+        badge.setAlignment(Qt.AlignCenter)
+        badge.setStyleSheet(
+            f"background:{color}; color:#fff; border-radius:5px;"
+            "font-size:9px; font-weight:800; letter-spacing:0.5px;"
+            "border:none; background-color:" + color + ";")
+
+        self._val = QLabel("—")
+        self._val.setStyleSheet(
+            "background:transparent; border:none;"
+            "font-size:13px; font-weight:700; color:#1A1F36;")
+
+        lay.addWidget(badge)
+        lay.addWidget(self._val)
+
+    def set_value(self, value: str):
+        self._val.setText(value)
+
+
+class QuoteBar(QFrame):
+    _COINS = [
+        ("USD", False),
+        ("EUR", False),
+        ("BTC", True),
+    ]
+
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedHeight(32)
-        self._text  = "   Conectando e buscando cotações…   "
-        self._x     = 0.0
-        self._tw    = 0   # text width em pixels (calculado no primeiro paint)
-        self.setAttribute(Qt.WA_OpaquePaintEvent, True)
+        self.setObjectName("quoteBar")
+        self.setFixedHeight(48)
 
-        self._timer = QTimer(self)
-        self._timer.timeout.connect(self._tick)
-        self._timer.start(18)   # ~55 fps
+        outer = QHBoxLayout(self)
+        outer.setContentsMargins(20, 0, 20, 0)
+        outer.setSpacing(0)
+
+        self._chips: dict[str, _QuoteChip] = {}
+        for i, (code, _) in enumerate(self._COINS):
+            chip = _QuoteChip(code)
+            self._chips[code] = chip
+            outer.addWidget(chip)
+
+            if i < len(self._COINS) - 1:
+                sep = QFrame()
+                sep.setFrameShape(QFrame.VLine)
+                sep.setFixedHeight(18)
+                sep.setStyleSheet(
+                    "background:#DDE4F0; max-width:1px; margin:0 6px; border:none;")
+                outer.addWidget(sep)
+
+        outer.addStretch()
+
+        self._upd = QLabel("Buscando cotacoes...")
+        self._upd.setStyleSheet(
+            "font-size:10px; color:#94A3B8; background:transparent; border:none;")
+        outer.addWidget(self._upd)
 
     def update_quotes(self, quotes: dict, last_update: str):
         if not quotes:
             return
-        sym = {"USD": "🇺🇸 USD", "EUR": "🇪🇺 EUR",
-               "GBP": "🇬🇧 GBP", "BTC": "₿ BTC"}
-        parts = []
-        for k, label in sym.items():
-            if k in quotes:
-                v   = quotes[k]
-                fmt = f"R$ {v:,.0f}" if k == "BTC" else f"R$ {v:,.3f}"
-                parts.append(f"  {label}  {fmt}  ·")
-        self._text = "      ".join(parts)
+        for code, is_btc in self._COINS:
+            if code in quotes:
+                v   = quotes[code]
+                fmt = f"R$ {v:,.0f}" if is_btc else f"R$ {v:,.3f}"
+                self._chips[code].set_value(fmt)
         if last_update:
-            self._text += f"      ⟳ {last_update}"
-        self._tw = 0        # força recálculo
-        self._x  = float(self.width())
-
-    def _tick(self):
-        self._x -= 0.9
-        self.update()
-
-    def paintEvent(self, event):
-        p = QPainter(self)
-        if not p.isActive():
-            return
-        try:
-            p.fillRect(self.rect(), QColor("#EBF2FF"))
-
-            font = QFont("Segoe UI", 10)
-            font.setWeight(QFont.Medium)
-            p.setFont(font)
-            fm = p.fontMetrics()
-
-            if self._tw == 0:
-                self._tw = fm.horizontalAdvance(self._text) + 60
-
-            if self._x + self._tw < 0:
-                self._x = float(self.width())
-
-            p.setPen(QColor("#2D5BE3"))
-            p.drawText(int(self._x), 21, self._text)
-
-            # loop contínuo
-            if self._x < self.width():
-                p.drawText(int(self._x + self._tw), 21, self._text)
-        finally:
-            p.end()
+            self._upd.setText(f"Atualizado  {last_update}")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  BarChart  — paintEvent único
+#  BarChart
 # ══════════════════════════════════════════════════════════════════════════════
 
 class BarChart(QWidget):
@@ -367,7 +368,7 @@ class BarChart(QWidget):
             p.setRenderHint(QPainter.Antialiasing)
 
             if not self._data:
-                p.setPen(QColor("#A0AABF"))
+                p.setPen(QColor("#94A3B8"))
                 p.setFont(QFont("Segoe UI", 10))
                 p.drawText(self.rect(), Qt.AlignCenter, "Sem dados")
                 return
@@ -388,15 +389,13 @@ class BarChart(QWidget):
                 bx = PAD + i * (bar_w + gap)
                 by = H - PAD - bh
 
-                # barra
                 p.setBrush(QColor("#5B8DEF"))
                 p.setPen(Qt.NoPen)
                 path = QPainterPath()
                 path.addRoundedRect(QRectF(bx, by, bar_w, bh), 3.0, 3.0)
                 p.drawPath(path)
 
-                # rótulo mês
-                p.setPen(QColor("#A0AABF"))
+                p.setPen(QColor("#94A3B8"))
                 p.setFont(QFont("Segoe UI", 8))
                 try:
                     name = self.MONTHS[int(month)]
@@ -408,7 +407,7 @@ class BarChart(QWidget):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  LineChart  — paintEvent único
+#  LineChart
 # ══════════════════════════════════════════════════════════════════════════════
 
 class LineChart(QWidget):
@@ -434,37 +433,33 @@ class LineChart(QWidget):
         try:
             p.setRenderHint(QPainter.Antialiasing)
 
-            W, H    = float(self.width()), float(self.height())
-            PL, PR  = 62.0, 16.0
-            PT, PB  = 22.0, 34.0
+            W, H   = float(self.width()), float(self.height())
+            PL, PR = 62.0, 16.0
+            PT, PB = 22.0, 34.0
 
             all_vals = [v for _, v in self._income] + \
                        [v for _, v in self._expense]
 
             if not all_vals:
-                p.setPen(QColor("#A0AABF"))
+                p.setPen(QColor("#94A3B8"))
                 p.setFont(QFont("Segoe UI", 10))
-                p.drawText(self.rect(), Qt.AlignCenter,
-                           "Sem dados para exibir")
+                p.drawText(self.rect(), Qt.AlignCenter, "Sem dados para exibir")
                 return
 
             max_v = max(all_vals) * 1.15 or 1.0
             CW    = W - PL - PR
             CH    = H - PT - PB
 
-            # ── grid horizontal ──
             for i in range(5):
                 gy  = PT + (i / 4.0) * CH
                 val = max_v * (1.0 - i / 4.0)
                 p.setPen(QPen(QColor("#E8EDF7"), 1, Qt.DashLine))
                 p.drawLine(int(PL), int(gy), int(W - PR), int(gy))
-                p.setPen(QColor("#B0BAD0"))
+                p.setPen(QColor("#94A3B8"))
                 p.setFont(QFont("Segoe UI", 8))
-                label = (f"{val/1000:.1f}k" if val >= 1000
-                         else f"{val:.0f}")
+                label = (f"{val/1000:.1f}k" if val >= 1000 else f"{val:.0f}")
                 p.drawText(2, int(gy) + 5, label)
 
-            # ── helper: converte série em lista de (x,y) ──
             def to_pts(series):
                 n = len(series)
                 if n == 0:
@@ -475,7 +470,6 @@ class LineChart(QWidget):
                     for i, (_, v) in enumerate(series)
                 ]
 
-            # ── desenha uma série ──
             def draw_series(series, line_color: str):
                 pts = to_pts(series)
                 if len(pts) < 2:
@@ -489,20 +483,18 @@ class LineChart(QWidget):
                 p.setBrush(Qt.NoBrush)
                 p.drawPath(path)
 
-                # pontos
                 p.setPen(QPen(QColor("#FFFFFF"), 2))
                 p.setBrush(QColor(line_color))
                 for px, py in pts:
-                    p.drawEllipse(QRectF(px - 4.5, py - 4.5, 9.0, 9.0))
+                    p.drawEllipse(QRectF(px - 4, py - 4, 8.0, 8.0))
 
             draw_series(self._income,  "#22C55E")
             draw_series(self._expense, "#EF4444")
 
-            # ── rótulos eixo X ──
             ref = self._expense if self._expense else self._income
             if ref:
                 n = len(ref)
-                p.setPen(QColor("#7A849E"))
+                p.setPen(QColor("#64748B"))
                 p.setFont(QFont("Segoe UI", 9))
                 for i, (month, _) in enumerate(ref):
                     px = PL + (i / max(n - 1, 1)) * CW
@@ -512,7 +504,6 @@ class LineChart(QWidget):
                         name = str(month)
                     p.drawText(int(px) - 13, int(H) - 4, name)
 
-            # ── legenda ──
             for i, (color, label) in enumerate([
                 ("#22C55E", "Receitas"),
                 ("#EF4444", "Despesas"),
@@ -521,7 +512,7 @@ class LineChart(QWidget):
                 p.setBrush(QColor(color))
                 p.setPen(Qt.NoPen)
                 p.drawRoundedRect(QRectF(lx, 6, 14, 8), 3, 3)
-                p.setPen(QColor("#7A849E"))
+                p.setPen(QColor("#64748B"))
                 p.setFont(QFont("Segoe UI", 9))
                 p.drawText(lx + 18, 15, label)
         finally:
@@ -550,10 +541,10 @@ class ConfirmDlg(QDialog):
         lay.addStretch()
 
         row = QHBoxLayout()
-        bn = QPushButton("Cancelar")
+        bn  = QPushButton("Cancelar")
         bn.setProperty("role", "secondary")
         bn.clicked.connect(self.reject)
-        by = QPushButton("Confirmar")
+        by  = QPushButton("Confirmar")
         by.setProperty("role", "danger")
         by.clicked.connect(self.accept)
         row.addWidget(bn)

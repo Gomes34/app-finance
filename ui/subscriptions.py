@@ -4,11 +4,22 @@ from PySide6.QtWidgets import (
     QTextEdit, QDateEdit, QFrame, QScrollArea, QColorDialog,
 )
 from PySide6.QtCore import Qt, QDate, Signal
-from PySide6.QtGui import QColor, QFont
+from PySide6.QtGui import QColor
 from datetime import datetime
 
 import database as db
 from ui.widgets import Card, KPICard, ConfirmDlg, clear_layout
+
+
+def _badge(name: str, color: str) -> QLabel:
+    txt = (name or "?")[:2].upper()
+    lbl = QLabel(txt)
+    lbl.setFixedSize(36, 36)
+    lbl.setAlignment(Qt.AlignCenter)
+    lbl.setStyleSheet(
+        f"background:{color}22; color:{color}; border-radius:10px;"
+        "font-size:11px; font-weight:800; border:none;")
+    return lbl
 
 
 # ── Card de assinatura ────────────────────────────────────────────────────────
@@ -33,26 +44,22 @@ class SubCard(Card):
         stripe.setFixedWidth(5)
         stripe.setStyleSheet(
             f"background:{self.sub['color']};"
-            "border-top-left-radius:16px;"
-            "border-bottom-left-radius:16px;")
+            "border-top-left-radius:14px;"
+            "border-bottom-left-radius:14px;")
         lay.addWidget(stripe)
 
-        # ícone
-        ic = QLabel(self.sub["category_icon"] or "🔄")
-        ic.setFont(QFont("Segoe UI Emoji", 22))
-        ic.setFixedWidth(36)
-        lay.addWidget(ic)
+        # badge com iniciais do nome
+        lay.addWidget(_badge(self.sub["name"], self.sub["color"] or "#5B8DEF"))
 
         # info
         info = QVBoxLayout()
-        info.setSpacing(3)
+        info.setSpacing(2)
         nm = QLabel(self.sub["name"])
-        nm.setStyleSheet(
-            "font-size:14px; font-weight:700; color:#1A1F36;")
+        nm.setStyleSheet("font-size:14px; font-weight:700; color:#1A1F36;")
         ct = QLabel(self.sub["category_name"] or "—")
-        ct.setStyleSheet("font-size:10px; color:#A0AABF;")
-        dy = QLabel(f"📅  Vence dia {self.sub['billing_day']}")
-        dy.setStyleSheet("font-size:10px; color:#7A849E;")
+        ct.setStyleSheet("font-size:10px; color:#94A3B8;")
+        dy = QLabel(f"Vence dia {self.sub['billing_day']}")
+        dy.setStyleSheet("font-size:10px; color:#64748B;")
         info.addWidget(nm)
         info.addWidget(ct)
         info.addWidget(dy)
@@ -63,11 +70,10 @@ class SubCard(Card):
         ar.setAlignment(Qt.AlignVCenter | Qt.AlignRight)
         av = QLabel(f"R$ {self.sub['amount']:,.2f}")
         av.setStyleSheet(
-            f"color:{self.sub['color']};"
-            "font-size:17px; font-weight:700;")
+            f"color:{self.sub['color']}; font-size:17px; font-weight:700;")
         av.setAlignment(Qt.AlignRight)
-        pm = QLabel("/ mês")
-        pm.setStyleSheet("color:#A0AABF; font-size:10px;")
+        pm = QLabel("/ mes")
+        pm.setStyleSheet("color:#94A3B8; font-size:10px;")
         pm.setAlignment(Qt.AlignRight)
         ar.addWidget(av)
         ar.addWidget(pm)
@@ -78,11 +84,12 @@ class SubCard(Card):
         ac.setSpacing(5)
         ac.setAlignment(Qt.AlignVCenter)
 
-        ok = bool(self.sub["active"])
-        tc = "#16A34A" if ok else "#9CA3AF"
-        tb = QPushButton("✅ Ativa" if ok else "⏸ Pausada")
+        ok  = bool(self.sub["active"])
+        tc  = "#16A34A" if ok else "#9CA3AF"
+        lbl = "Ativa" if ok else "Pausada"
+        tb  = QPushButton(lbl)
         tb.setFixedHeight(26)
-        tb.setFixedWidth(90)
+        tb.setFixedWidth(80)
         tb.setStyleSheet(
             f"background:transparent; color:{tc};"
             f"border:1.5px solid {tc}; border-radius:7px;"
@@ -92,12 +99,20 @@ class SubCard(Card):
 
         br2 = QHBoxLayout()
         br2.setSpacing(4)
-        for emoji, sig in [("✏️", self.sig_edit), ("🗑️", self.sig_delete)]:
-            b = QPushButton(emoji)
-            b.setFixedSize(26, 26)
-            b.setStyleSheet(
-                "background:#F0F4FF; border-radius:6px;"
-                "font-size:11px; padding:0; border:none;")
+        for label, style, sig in [
+            ("Editar",
+             "background:#EEF4FF; color:#3D74E8; border-radius:6px;"
+             "font-size:10px; font-weight:600; padding:0 6px; border:none;",
+             self.sig_edit),
+            ("Excluir",
+             "background:#FEF2F2; color:#EF4444; border-radius:6px;"
+             "font-size:10px; font-weight:600; padding:0 6px; border:none;",
+             self.sig_delete),
+        ]:
+            b = QPushButton(label)
+            b.setFixedHeight(26)
+            b.setMinimumWidth(46)
+            b.setStyleSheet(style)
             b.setCursor(Qt.PointingHandCursor)
             b.clicked.connect(lambda _, s=sig: s.emit(self.sub["id"]))
             br2.addWidget(b)
@@ -114,7 +129,7 @@ class SubDialog(QDialog):
         self._sub   = sub
         self._color = sub["color"] if sub else "#5B8DEF"
         self.setWindowTitle("Assinatura")
-        self.setFixedSize(460, 480)
+        self.setFixedSize(460, 460)
         self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
         self._build()
         if sub:
@@ -125,15 +140,12 @@ class SubDialog(QDialog):
         lay.setContentsMargins(28, 26, 28, 22)
         lay.setSpacing(12)
 
-        t = QLabel("🔄  " +
-                   ("Editar" if self._sub else "Nova") +
-                   " Assinatura")
-        t.setStyleSheet(
-            "font-size:17px; font-weight:700; color:#1A1F36;")
+        t = QLabel(("Editar" if self._sub else "Nova") + " Assinatura")
+        t.setStyleSheet("font-size:17px; font-weight:700; color:#1A1F36;")
         lay.addWidget(t)
 
         self._name = QLineEdit()
-        self._name.setPlaceholderText("Nome do serviço (ex: Netflix…)")
+        self._name.setPlaceholderText("Nome do servico (ex: Netflix...)")
         self._name.setFixedHeight(42)
         lay.addWidget(self._name)
 
@@ -159,7 +171,7 @@ class SubDialog(QDialog):
         self._cat = QComboBox()
         self._cat.setFixedHeight(42)
         for c in db.get_categories("expense"):
-            self._cat.addItem(f"{c['icon']} {c['name']}", c["id"])
+            self._cat.addItem(c["name"], c["id"])
         lay.addWidget(self._cat)
 
         self._start = QDateEdit(QDate.currentDate())
@@ -168,10 +180,9 @@ class SubDialog(QDialog):
         self._start.setFixedHeight(42)
         lay.addWidget(self._start)
 
-        # cor
         cr = QHBoxLayout()
         cl = QLabel("Cor:")
-        cl.setStyleSheet("color:#7A849E; font-size:12px;")
+        cl.setStyleSheet("color:#64748B; font-size:12px;")
         cl.setFixedWidth(36)
         self._cbtn = QPushButton()
         self._cbtn.setFixedSize(44, 36)
@@ -185,7 +196,7 @@ class SubDialog(QDialog):
         lay.addLayout(cr)
 
         self._notes = QTextEdit()
-        self._notes.setPlaceholderText("Observações…")
+        self._notes.setPlaceholderText("Observacoes...")
         self._notes.setMaximumHeight(68)
         lay.addWidget(self._notes)
 
@@ -196,7 +207,7 @@ class SubDialog(QDialog):
         bc = QPushButton("Cancelar")
         bc.setProperty("role", "secondary")
         bc.clicked.connect(self.reject)
-        bs = QPushButton("✅  Salvar")
+        bs = QPushButton("Salvar")
         bs.setProperty("role", "success")
         bs.clicked.connect(self._save)
         br.addWidget(bc)
@@ -228,7 +239,7 @@ class SubDialog(QDialog):
         name = self._name.text().strip()
         if not name:
             self._name.setStyleSheet(
-                "border:1.5px solid #EF4444; border-radius:10px;"
+                "border:1.5px solid #EF4444; border-radius:9px;"
                 "padding:8px 12px; background:#FFF5F5;")
             return
         amt    = self._amt.value()
@@ -262,11 +273,10 @@ class SubscriptionsPage(QWidget):
 
         hdr = QHBoxLayout()
         t = QLabel("Assinaturas")
-        t.setStyleSheet(
-            "font-size:22px; font-weight:700; color:#1A1F36;")
+        t.setStyleSheet("font-size:22px; font-weight:800; color:#1A1F36;")
         hdr.addWidget(t)
         hdr.addStretch()
-        b = QPushButton("＋  Nova Assinatura")
+        b = QPushButton("+ Nova Assinatura")
         b.setFixedHeight(40)
         b.setCursor(Qt.PointingHandCursor)
         b.clicked.connect(self._new)
@@ -280,7 +290,7 @@ class SubscriptionsPage(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
-        self._inner = QWidget()
+        self._inner     = QWidget()
         self._cards_lay = QVBoxLayout(self._inner)
         self._cards_lay.setSpacing(10)
         self._cards_lay.setContentsMargins(0, 0, 6, 0)
@@ -290,47 +300,44 @@ class SubscriptionsPage(QWidget):
     def refresh(self):
         subs = db.get_subscriptions()
 
-        # KPIs
         clear_layout(self._kpi_row)
         active   = [s for s in subs if s["active"]]
         inactive = [s for s in subs if not s["active"]]
         monthly  = sum(s["amount"] for s in active)
 
-        for lbl, val, col, ic in [
-            ("Mensal",   f"R$ {monthly:,.2f}",      "#EF4444", "💸"),
-            ("Anual",    f"R$ {monthly * 12:,.2f}", "#3D74E8", "📅"),
-            ("Ativas",   str(len(active)),           "#16A34A", "✅"),
-            ("Pausadas", str(len(inactive)),         "#9CA3AF", "⏸"),
+        for lbl, val, col, badge in [
+            ("Mensal",   f"R$ {monthly:,.2f}",       "#EF4444", "MEN"),
+            ("Anual",    f"R$ {monthly * 12:,.2f}",  "#3D74E8", "ANO"),
+            ("Ativas",   str(len(active)),             "#16A34A", "AT"),
+            ("Pausadas", str(len(inactive)),           "#9CA3AF", "PAU"),
         ]:
-            kpi = KPICard(lbl, val, "", ic, col)
+            kpi = KPICard(lbl, val, "", badge, col)
             kpi.setFixedHeight(96)
             self._kpi_row.addWidget(kpi)
 
-        # Cards
         clear_layout(self._cards_lay)
 
         if not subs:
             e = QLabel(
                 "Nenhuma assinatura cadastrada.\n"
-                "Clique em '＋ Nova Assinatura' para começar.")
+                "Clique em '+ Nova Assinatura' para comecar.")
             e.setAlignment(Qt.AlignCenter)
-            e.setStyleSheet(
-                "color:#A0AABF; font-size:14px; padding:40px;")
+            e.setStyleSheet("color:#94A3B8; font-size:14px; padding:40px;")
             self._cards_lay.addWidget(e)
         else:
             if active:
-                lbl_a = QLabel("  ✅  Ativas")
+                lbl_a = QLabel("Ativas")
                 lbl_a.setStyleSheet(
-                    "font-size:12px; color:#16A34A; font-weight:700;")
+                    "font-size:12px; color:#16A34A; font-weight:700; padding:2px 0;")
                 self._cards_lay.addWidget(lbl_a)
                 for s in active:
                     self._add_card(s)
 
             if inactive:
-                lbl_i = QLabel("  ⏸  Pausadas")
+                lbl_i = QLabel("Pausadas")
                 lbl_i.setStyleSheet(
                     "font-size:12px; color:#9CA3AF; font-weight:700;"
-                    "margin-top:8px;")
+                    "padding:2px 0; margin-top:8px;")
                 self._cards_lay.addWidget(lbl_i)
                 for s in inactive:
                     self._add_card(s)
@@ -371,10 +378,7 @@ class SubscriptionsPage(QWidget):
         self.refresh_signal.emit()
 
     def _del(self, sid: int):
-        dlg = ConfirmDlg(
-            "Excluir Assinatura",
-            "Deseja excluir esta assinatura?",
-            self)
+        dlg = ConfirmDlg("Excluir Assinatura", "Deseja excluir esta assinatura?", self)
         if dlg.exec() == QDialog.Accepted:
             db.delete_subscription(sid)
             self.refresh()

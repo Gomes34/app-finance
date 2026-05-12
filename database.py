@@ -1,8 +1,11 @@
 import sqlite3
 import os
+import uuid
+from calendar import monthrange
 from datetime import datetime
 
-DB_PATH = os.path.join(os.path.expanduser("~"), "financeapp_pro.db")
+_HERE = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(_HERE, "financeapp_pro.db")
 
 
 def get_connection():
@@ -58,27 +61,47 @@ def init_db():
     """)
 
     defaults = [
-        ("Alimentação",  "#FF6B6B", "🍔", "expense"),
-        ("Transporte",   "#4ECDC4", "🚗", "expense"),
-        ("Moradia",      "#45B7D1", "🏠", "expense"),
-        ("Saúde",        "#96CEB4", "💊", "expense"),
-        ("Lazer",        "#F7B731", "🎮", "expense"),
-        ("Educação",     "#A29BFE", "📚", "expense"),
-        ("Vestuário",    "#FD79A8", "👕", "expense"),
-        ("Streaming",    "#6C63FF", "📺", "expense"),
-        ("Mercado",      "#00B894", "🛒", "expense"),
-        ("Outros",       "#B2BEC3", "📦", "expense"),
-        ("Salário",      "#00B894", "💼", "income"),
-        ("Freelance",    "#00CEC9", "💻", "income"),
-        ("Investimentos","#FDCB6E", "📈", "income"),
-        ("Outros Ganhos","#74B9FF", "💵", "income"),
+        ("Alimentacao",  "#FF6B6B", "AL", "expense"),
+        ("Transporte",   "#4ECDC4", "TR", "expense"),
+        ("Moradia",      "#45B7D1", "MO", "expense"),
+        ("Saude",        "#96CEB4", "SA", "expense"),
+        ("Lazer",        "#F7B731", "LZ", "expense"),
+        ("Educacao",     "#A29BFE", "ED", "expense"),
+        ("Vestuario",    "#FD79A8", "VS", "expense"),
+        ("Streaming",    "#6C63FF", "ST", "expense"),
+        ("Mercado",      "#00B894", "ME", "expense"),
+        ("Outros",       "#B2BEC3", "OT", "expense"),
+        ("Salario",      "#00B894", "SL", "income"),
+        ("Freelance",    "#00CEC9", "FL", "income"),
+        ("Investimentos","#FDCB6E", "IV", "income"),
+        ("Outros Ganhos","#74B9FF", "OG", "income"),
     ]
     for row in defaults:
         c.execute(
             "INSERT OR IGNORE INTO categories (name,color,icon,type) VALUES (?,?,?,?)",
             row)
+    # Migração: adiciona colunas de parcelamento se não existirem
+    existing = {r[1] for r in c.execute("PRAGMA table_info(transactions)").fetchall()}
+    for col, definition in [
+        ("installment_total",   "INTEGER DEFAULT 0"),
+        ("installment_current", "INTEGER DEFAULT 0"),
+        ("installment_group",   "TEXT DEFAULT NULL"),
+    ]:
+        if col not in existing:
+            c.execute(f"ALTER TABLE transactions ADD COLUMN {col} {definition}")
+
     conn.commit()
     conn.close()
+
+
+def _add_months(date_str: str, n: int) -> str:
+    """Retorna date_str + n meses, respeitando fim de mês."""
+    d     = datetime.strptime(date_str, "%Y-%m-%d")
+    month = d.month - 1 + n
+    year  = d.year + month // 12
+    month = month % 12 + 1
+    day   = min(d.day, monthrange(year, month)[1])
+    return f"{year}-{month:02d}-{day:02d}"
 
 
 # ── Transactions ─────────────────────────────────────────────────────────────
@@ -247,3 +270,105 @@ def delete_goal(gid):
     conn = get_connection()
     conn.execute("DELETE FROM goals WHERE id=?", (gid,))
     conn.commit(); conn.close()
+
+
+# ── Installments ──────────────────────────────────────────────────────────────
+
+def add_installment_transactions(description, total_amount, category_id,
+                                  start_date, notes, num_installments):
+    """Cria N transações de despesa distribuídas mês a mês."""
+    group_id  = uuid.uuid4().hex[:12]
+    inst_amt  = round(total_amount / num_installments, 2)
+    first_amt = round(total_amount - inst_amt * (num_installments - 1), 2)
+    conn = get_connection()
+    for i in range(num_installments):
+        date   = _add_months(start_date, i)
+        amount = first_amt if i == 0 else inst_amt
+        conn.execute(
+            "INSERT INTO transactions "
+            "(description,amount,type,category_id,date,notes,"
+            " installment_total,installment_current,installment_group)"
+            " VALUES (?,?,?,?,?,?,?,?,?)",
+            (description, amount, "expense", category_id, date, notes,
+             num_installments, i + 1, group_id))
+    conn.commit(); conn.close()
+
+
+def get_invoice_transactions(month, year):
+    """Todas as despesas de um mês/ano para simulação de fatura."""
+    conn = get_connection()
+    rows = conn.execute("""
+        SELECT t.*,
+               c.name  AS category_name,
+               c.color AS category_color
+        FROM transactions t
+        LEFT JOIN categories c ON t.category_id = c.id
+        WHERE strftime('%m', t.date) = ?
+          AND strftime('%Y', t.date) = ?
+          AND t.type = 'expense'
+        ORDER BY t.date DESC, t.created_at DESC
+    """, (f"{month:02d}", str(year))).fetchall()
+    conn.close()
+    return rows
+
+
+def get_installment_projection(from_year, from_month, num_months=6):
+    """Total de parcelamentos comprometidos para os próximos N meses."""
+    from_date = f"{from_year}-{from_month:02d}-01"
+    conn = get_connection()
+    rows = conn.execute("""
+        SELECT
+            CAST(strftime('%Y', date) AS INTEGER) AS yr,
+            CAST(strftime('%m', date) AS INTEGER) AS mo,
+            SUM(amount) AS total
+        FROM transactions
+        WHERE installment_total > 0
+          AND type = 'expense'
+          AND date >= ?
+        GROUP BY yr, mo
+        ORDER BY yr, mo
+    """, (from_date,)).fetchall()
+    conn.close()
+
+    result = []
+    for i in range(num_months):
+        m     = (from_month - 1 + i) % 12 + 1
+        y     = from_year + (from_month - 1 + i) // 12
+        total = next(
+            (float(r["total"]) for r in rows if r["yr"] == y and r["mo"] == m),
+            0.0)
+        result.append((y, m, total))
+    return result
+
+
+def get_active_installment_groups():
+    """Grupos de parcelamento com parcelas futuras pendentes."""
+    conn = get_connection()
+    rows = conn.execute("""
+        SELECT
+            t.installment_group,
+            t.description,
+            MAX(t.installment_total)  AS installment_total,
+            SUM(CASE WHEN t.date < date('now','start of month')
+                     THEN 1 ELSE 0 END) AS paid_count,
+            SUM(CASE WHEN t.date >= date('now','start of month')
+                     THEN 1 ELSE 0 END) AS remaining_count,
+            SUM(CASE WHEN t.date >= date('now','start of month')
+                     THEN t.amount ELSE 0 END) AS remaining_total,
+            AVG(t.amount)  AS monthly_amount,
+            MAX(t.date)    AS end_date,
+            MIN(CASE WHEN t.date >= date('now','start of month')
+                     THEN t.date ELSE NULL END) AS next_date,
+            c.name  AS category_name,
+            c.color AS category_color
+        FROM transactions t
+        LEFT JOIN categories c ON t.category_id = c.id
+        WHERE t.installment_total > 0
+          AND t.installment_group IS NOT NULL
+          AND t.type = 'expense'
+        GROUP BY t.installment_group
+        HAVING remaining_count > 0
+        ORDER BY next_date
+    """).fetchall()
+    conn.close()
+    return rows

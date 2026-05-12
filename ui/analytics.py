@@ -3,14 +3,13 @@ from PySide6.QtWidgets import (
     QFrame, QScrollArea,
 )
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont
 from datetime import datetime
 
 import database as db
 from ui.widgets import Card, DonutChart, LineChart, SmoothBar, clear_layout
 
 MONTHS_PT = [
-    "", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+    "", "Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho",
     "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
 ]
 
@@ -26,21 +25,16 @@ class CompareBar(QWidget):
 
         diff  = curr - prev
         pct   = (diff / prev * 100) if prev > 0 else 0.0
-        arrow = "↑" if diff > 0 else ("↓" if diff < 0 else "→")
-        dc    = ("#EF4444" if diff > 0
-                 else "#16A34A" if diff < 0
-                 else "#9CA3AF")
+        arrow = "+" if diff > 0 else ("-" if diff < 0 else "=")
+        dc    = ("#EF4444" if diff > 0 else "#16A34A" if diff < 0 else "#9CA3AF")
 
         hdr = QHBoxLayout()
         l1 = QLabel(label)
-        l1.setStyleSheet(
-            "font-size:12px; color:#7A849E; font-weight:600;")
-        l2 = QLabel(f"{arrow} {abs(pct):.1f}%")
-        l2.setStyleSheet(
-            f"font-size:11px; color:{dc}; font-weight:700;")
+        l1.setStyleSheet("font-size:12px; color:#64748B; font-weight:600;")
+        l2 = QLabel(f"{arrow}{abs(pct):.1f}%")
+        l2.setStyleSheet(f"font-size:11px; color:{dc}; font-weight:700;")
         l3 = QLabel(f"R$ {curr:,.0f}")
-        l3.setStyleSheet(
-            f"font-size:13px; color:{color}; font-weight:700;")
+        l3.setStyleSheet(f"font-size:13px; color:{color}; font-weight:700;")
         hdr.addWidget(l1)
         hdr.addStretch()
         hdr.addWidget(l2)
@@ -50,8 +44,8 @@ class CompareBar(QWidget):
         bar = SmoothBar(curr, max(curr, prev, 1), color)
         lay.addWidget(bar)
 
-        pl = QLabel(f"Mês anterior: R$ {prev:,.0f}")
-        pl.setStyleSheet("font-size:10px; color:#A0AABF;")
+        pl = QLabel(f"Mes anterior: R$ {prev:,.0f}")
+        pl.setStyleSheet("font-size:10px; color:#94A3B8;")
         lay.addWidget(pl)
 
 
@@ -68,11 +62,9 @@ class AnalyticsPage(QWidget):
         lay.setContentsMargins(26, 20, 26, 20)
         lay.setSpacing(14)
 
-        # cabeçalho
         hdr = QHBoxLayout()
-        t = QLabel("Analytics & BI")
-        t.setStyleSheet(
-            "font-size:22px; font-weight:700; color:#1A1F36;")
+        t = QLabel("Analytics")
+        t.setStyleSheet("font-size:22px; font-weight:800; color:#1A1F36;")
         hdr.addWidget(t)
         hdr.addStretch()
 
@@ -86,7 +78,6 @@ class AnalyticsPage(QWidget):
         hdr.addWidget(self._ycb)
         lay.addLayout(hdr)
 
-        # scroll
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
@@ -97,25 +88,23 @@ class AnalyticsPage(QWidget):
         scroll.setWidget(inner)
         lay.addWidget(scroll)
 
-        # ── linha anual ──
         lc = Card()
         ll = QVBoxLayout(lc)
         ll.setContentsMargins(16, 14, 16, 12)
-        ll.addWidget(self._sec("📈  Receitas vs Despesas — Ano Completo"))
+        ll.addWidget(self._sec("Receitas vs Despesas — Ano Completo"))
         self._line = LineChart()
         ll.addWidget(self._line)
         self._lay.addWidget(lc)
 
-        # ── comparativo mensal ──
         mc = Card()
         ml = QVBoxLayout(mc)
         ml.setContentsMargins(16, 14, 16, 12)
-        ml.addWidget(self._sec("📊  Comparativo Mensal"))
+        ml.addWidget(self._sec("Comparativo Mensal"))
 
         msel = QHBoxLayout()
         self._mcb = QComboBox()
         _months = [
-            "Janeiro", "Fevereiro", "Março", "Abril",
+            "Janeiro", "Fevereiro", "Marco", "Abril",
             "Maio", "Junho", "Julho", "Agosto",
             "Setembro", "Outubro", "Novembro", "Dezembro",
         ]
@@ -134,14 +123,13 @@ class AnalyticsPage(QWidget):
         ml.addLayout(self._cmp_lay)
         self._lay.addWidget(mc)
 
-        # ── donut + breakdown ──
         cr = QHBoxLayout()
         cr.setSpacing(14)
 
         dc = Card()
         dl = QVBoxLayout(dc)
         dl.setContentsMargins(16, 14, 16, 12)
-        dl.addWidget(self._sec("🍩  Despesas por Categoria"))
+        dl.addWidget(self._sec("Despesas por Categoria"))
         self._donut = DonutChart()
         self._donut.setMinimumHeight(200)
         dl.addWidget(self._donut)
@@ -150,7 +138,7 @@ class AnalyticsPage(QWidget):
         bkc = Card()
         bkl = QVBoxLayout(bkc)
         bkl.setContentsMargins(16, 14, 16, 12)
-        bkl.addWidget(self._sec("📋  Detalhamento"))
+        bkl.addWidget(self._sec("Detalhamento"))
         self._bk_lay = QVBoxLayout()
         self._bk_lay.setSpacing(8)
         bkl.addLayout(self._bk_lay)
@@ -162,11 +150,10 @@ class AnalyticsPage(QWidget):
 
     @staticmethod
     def _sec(text: str) -> QLabel:
-        l = QLabel(text)
-        l.setStyleSheet(
-            "font-size:14px; font-weight:700; color:#1A1F36;"
-            "margin-bottom:4px;")
-        return l
+        lbl = QLabel(text)
+        lbl.setStyleSheet(
+            "font-size:13px; font-weight:700; color:#1A1F36; margin-bottom:4px;")
+        return lbl
 
     def _year_changed(self):
         self._year = self._ycb.currentData()
@@ -194,19 +181,19 @@ class AnalyticsPage(QWidget):
 
     def _refresh_cmp(self):
         clear_layout(self._cmp_lay)
-        m, y  = self._month, self._year
-        pm    = m - 1 if m > 1 else 12
-        py    = y if m > 1 else y - 1
-        curr  = db.get_transactions(m, y)
-        prev  = db.get_transactions(pm, py)
-        ci    = sum(t["amount"] for t in curr if t["type"] == "income")
-        ce    = sum(t["amount"] for t in curr if t["type"] == "expense")
-        pi    = sum(t["amount"] for t in prev if t["type"] == "income")
-        pe    = sum(t["amount"] for t in prev if t["type"] == "expense")
+        m, y = self._month, self._year
+        pm   = m - 1 if m > 1 else 12
+        py   = y if m > 1 else y - 1
+        curr = db.get_transactions(m, y)
+        prev = db.get_transactions(pm, py)
+        ci   = sum(t["amount"] for t in curr if t["type"] == "income")
+        ce   = sum(t["amount"] for t in curr if t["type"] == "expense")
+        pi   = sum(t["amount"] for t in prev if t["type"] == "income")
+        pe   = sum(t["amount"] for t in prev if t["type"] == "expense")
         for lbl, cv, pv, col in [
-            ("💰  Receitas", ci, pi, "#16A34A"),
-            ("💸  Despesas", ce, pe, "#EF4444"),
-            ("💎  Saldo",    ci - ce, pi - pe, "#3D74E8"),
+            ("Receitas", ci,      pi,      "#16A34A"),
+            ("Despesas", ce,      pe,      "#EF4444"),
+            ("Saldo",    ci - ce, pi - pe, "#3D74E8"),
         ]:
             self._cmp_lay.addWidget(CompareBar(lbl, cv, pv, col))
 
@@ -223,12 +210,11 @@ class AnalyticsPage(QWidget):
                 vl  = QVBoxLayout()
                 vl.setSpacing(2)
                 hr  = QHBoxLayout()
-                nl  = QLabel(f"{r['icon']}  {r['name']}")
+                nl  = QLabel(r["name"])
                 nl.setStyleSheet("font-size:11px; color:#1A1F36;")
-                pl  = QLabel(f"{pct:.1f}%  ·  R$ {r['total']:,.0f}")
+                pl  = QLabel(f"{pct:.1f}%  R$ {r['total']:,.0f}")
                 pl.setStyleSheet(
-                    f"font-size:11px; color:{r['color']};"
-                    "font-weight:700;")
+                    f"font-size:11px; color:{r['color']}; font-weight:700;")
                 pl.setAlignment(Qt.AlignRight)
                 hr.addWidget(nl)
                 hr.addStretch()
@@ -239,6 +225,6 @@ class AnalyticsPage(QWidget):
                 self._bk_lay.addLayout(vl)
         else:
             self._donut.set_data([])
-            e = QLabel("Sem dados neste período")
-            e.setStyleSheet("color:#A0AABF; padding:8px;")
+            e = QLabel("Sem dados neste periodo")
+            e.setStyleSheet("color:#94A3B8; padding:8px;")
             self._bk_lay.addWidget(e)

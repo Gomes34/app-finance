@@ -11,13 +11,12 @@ def fetch_quotes(callback=None):
         global QUOTES_CACHE, LAST_UPDATE
         try:
             url = ("https://economia.awesomeapi.com.br"
-                   "/json/last/USD-BRL,EUR-BRL,BTC-BRL,GBP-BRL")
+                   "/json/last/USD-BRL,EUR-BRL,BTC-BRL")
             r = requests.get(url, timeout=6)
             data = r.json()
             QUOTES_CACHE = {
                 "USD": float(data["USDBRL"]["bid"]),
                 "EUR": float(data["EURBRL"]["bid"]),
-                "GBP": float(data["GBPBRL"]["bid"]),
                 "BTC": float(data["BTCBRL"]["bid"]),
             }
             LAST_UPDATE = datetime.now().strftime("%H:%M")

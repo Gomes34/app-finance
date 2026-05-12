@@ -1,3 +1,4 @@
+import os
 import sys
 from datetime import datetime
 
@@ -11,18 +12,32 @@ from PySide6.QtGui import QFont
 import database as db
 from services.quotes import fetch_quotes
 from ui.theme         import STYLESHEET
-from ui.widgets       import NavButton, FadeStack, TickerBar
+from ui.widgets       import NavButton, FadeStack, QuoteBar
 from ui.dashboard     import DashboardPage
 from ui.transactions  import TransactionsPage
 from ui.subscriptions import SubscriptionsPage
 from ui.analytics     import AnalyticsPage
 from ui.goals         import GoalsPage
+from ui.invoice       import InvoicePage
+
+
+def _read_access_code() -> str:
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    try:
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("ACCESS_CODE="):
+                    return line.split("=", 1)[1].strip().strip('"').strip("'")
+    except FileNotFoundError:
+        pass
+    return ""
 
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("💰  FinanceApp Pro")
+        self.setWindowTitle("FinanceApp Pro")
         self.setMinimumSize(1080, 680)
         self.resize(1280, 800)
         self._build()
@@ -39,8 +54,8 @@ class MainWindow(QMainWindow):
         vlay.setContentsMargins(0, 0, 0, 0)
         vlay.setSpacing(0)
 
-        # ticker de cotações
-        self._ticker = TickerBar()
+        # barra de cotações fixa
+        self._ticker = QuoteBar()
         vlay.addWidget(self._ticker)
 
         body = QHBoxLayout()
@@ -56,22 +71,23 @@ class MainWindow(QMainWindow):
         sl.setContentsMargins(10, 16, 10, 16)
         sl.setSpacing(3)
 
-        logo = QLabel("  💎  FinanceApp")
+        logo = QLabel("FinanceApp")
         logo.setStyleSheet(
-            "font-size:16px; font-weight:700; color:#3D74E8;"
-            "padding:4px 4px 16px 4px;")
+            "font-size:17px; font-weight:800; color:#3D74E8;"
+            "padding:4px 4px 18px 8px; letter-spacing:0.5px;")
         sl.addWidget(logo)
 
         pages = [
-            ("🏠", "Dashboard",   0),
-            ("💳", "Transações",  1),
-            ("🔄", "Assinaturas", 2),
-            ("📊", "Analytics",   3),
-            ("🎯", "Metas",       4),
+            ("Dashboard",   0),
+            ("Transacoes",  1),
+            ("Assinaturas", 2),
+            ("Analytics",   3),
+            ("Metas",       4),
+            ("Fatura",      5),
         ]
         self._nav: list[NavButton] = []
-        for icon, label, idx in pages:
-            btn = NavButton(icon, label)
+        for label, idx in pages:
+            btn = NavButton(label)
             btn.clicked.connect(lambda _, i=idx: self._go(i))
             sl.addWidget(btn)
             self._nav.append(btn)
@@ -93,18 +109,19 @@ class MainWindow(QMainWindow):
         # ── páginas ───────────────────────────────────────────────────────────
         self._stack = FadeStack()
 
-        self._dash  = DashboardPage()
-        self._txs   = TransactionsPage()
-        self._subs  = SubscriptionsPage()
-        self._analy = AnalyticsPage()
-        self._goals = GoalsPage()
+        self._dash    = DashboardPage()
+        self._txs     = TransactionsPage()
+        self._subs    = SubscriptionsPage()
+        self._analy   = AnalyticsPage()
+        self._goals   = GoalsPage()
+        self._invoice = InvoicePage()
 
         for page in (self._dash, self._txs,
-                     self._subs, self._analy, self._goals):
+                     self._subs, self._analy, self._goals, self._invoice):
             self._stack.addWidget(page)
 
-        # cross-refresh: quando transação ou assinatura muda → atualiza dashboard
         self._txs.refresh_signal.connect(self._dash.refresh)
+        self._txs.refresh_signal.connect(self._invoice.refresh)
         self._subs.refresh_signal.connect(self._dash.refresh)
 
         body.addWidget(self._stack)
@@ -114,9 +131,10 @@ class MainWindow(QMainWindow):
         self._stack.go(idx)
         for i, btn in enumerate(self._nav):
             btn.set_active(i == idx)
-        # analytics precisa de refresh explícito pois não tem showEvent
         if idx == 3:
             self._analy.refresh()
+        if idx == 5:
+            self._invoice.refresh()
 
     def _load_quotes(self):
         fetch_quotes(callback=self._on_quotes)
@@ -132,6 +150,13 @@ def main():
     app.setFont(QFont("Segoe UI", 10))
 
     db.init_db()
+
+    code = _read_access_code()
+    if code:
+        from ui.login import LoginDialog
+        dlg = LoginDialog(code)
+        if dlg.exec() != LoginDialog.Accepted:
+            sys.exit(0)
 
     win = MainWindow()
     win.show()
